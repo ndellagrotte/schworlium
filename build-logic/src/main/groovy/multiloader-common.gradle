@@ -13,6 +13,14 @@ java {
     withJavadocJar()
 }
 
+repositories {
+    mavenCentral()
+    maven {
+        name = 'ModrinthMaven'
+        url = 'https://api.modrinth.com/maven'
+    }
+}
+
 tasks.withType(Jar).configureEach {
     from(rootProject.file('LICENSE')) {
         rename { "${it}_${mod_name}" }
@@ -50,7 +58,9 @@ processResources {
             'neoforge_version'             : neoforge_version,
             'neoforge_loader_version_range': neoforge_loader_version_range,
             'credits'                      : credits,
-            'java_version'                 : java_version
+            'java_version'                 : java_version,
+            'lithostitched_fabric_version' : lithostitched_fabric_version,
+            'lithostitched_neoforge_version': lithostitched_neoforge_version
     ]
 
     var jsonExpandProps = expandProps.collectEntries {
