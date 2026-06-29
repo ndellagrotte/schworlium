@@ -19,11 +19,8 @@ import java.nio.file.Path;
 
 public final class SchworliumConfig {
 
-    public static int lavaDepth = 10;
     public static int easeInDepth = 15;
     public static String lavaBlock = "minecraft:lava";
-    public static int maxCaveHeight = 128;
-    public static int minCaveHeight = 1;
     public static double noiseCutoffValue = -0.18;
     public static double surfaceCutoffValue = -0.081;
     public static double verticalCompressionMultiplier = 2.0;
@@ -52,11 +49,8 @@ public final class SchworliumConfig {
                 return;
             }
             JsonObject obj = root.getAsJsonObject();
-            lavaDepth = readInt(obj, "lavaDepth", lavaDepth);
             easeInDepth = readInt(obj, "easeInDepth", easeInDepth);
             lavaBlock = readString(obj, "lavaBlock", lavaBlock);
-            maxCaveHeight = readInt(obj, "maxCaveHeight", maxCaveHeight);
-            minCaveHeight = readInt(obj, "minCaveHeight", minCaveHeight);
             noiseCutoffValue = readDouble(obj, "noiseCutoffValue", noiseCutoffValue);
             surfaceCutoffValue = readDouble(obj, "surfaceCutoffValue", surfaceCutoffValue);
             verticalCompressionMultiplier = readDouble(obj, "verticalCompressionMultiplier", verticalCompressionMultiplier);
@@ -85,11 +79,8 @@ public final class SchworliumConfig {
         try {
             Files.createDirectories(file.getParent());
             JsonObject obj = new JsonObject();
-            obj.addProperty("lavaDepth", lavaDepth);
             obj.addProperty("easeInDepth", easeInDepth);
             obj.addProperty("lavaBlock", lavaBlock);
-            obj.addProperty("maxCaveHeight", maxCaveHeight);
-            obj.addProperty("minCaveHeight", minCaveHeight);
             obj.addProperty("noiseCutoffValue", noiseCutoffValue);
             obj.addProperty("surfaceCutoffValue", surfaceCutoffValue);
             obj.addProperty("verticalCompressionMultiplier", verticalCompressionMultiplier);

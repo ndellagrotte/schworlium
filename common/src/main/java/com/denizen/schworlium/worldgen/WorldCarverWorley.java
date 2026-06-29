@@ -22,12 +22,11 @@ import net.minecraft.world.level.levelgen.carver.WorldCarver;
 import java.util.function.Function;
 
 /*
- * Port of fluke.worleycaves.world.WorldCarverWorley (MIT, SuperFluke) to the
- * Minecraft 26.2 carver API. Algorithm, numeric constants and noise pipeline
- * are preserved verbatim; only the surrounding Minecraft API calls have been
- * updated. Logic that depended on the pre-1.18 SurfaceBuilder API (top/filler
- * block restoration in digBlock) has been dropped because that API no longer
- * exists; vanilla carvers in 1.21+ do not perform that restoration either.
+ * Adapted from fluke.worleycaves.world.WorldCarverWorley (MIT, SuperFluke) to
+ * the Minecraft 26.2 carver API. Caves span world Y -64 to 128. Logic that
+ * depended on the pre-1.18 SurfaceBuilder API (top/filler block restoration in
+ * digBlock) has been dropped because that API no longer exists; vanilla
+ * carvers in 1.21+ do not perform that restoration either.
  */
 public class WorldCarverWorley extends WorldCarver<CaveCarverConfiguration> {
 
@@ -37,16 +36,15 @@ public class WorldCarverWorley extends WorldCarver<CaveCarverConfiguration> {
     private static final BlockState SANDSTONE = Blocks.SANDSTONE.defaultBlockState();
     private static final BlockState RED_SANDSTONE = Blocks.RED_SANDSTONE.defaultBlockState();
 
-    private static final int HAS_CAVES_FLAG = 129;
+    private static final int CAVE_TOP = 128;
+    private static final int CAVE_BOTTOM = -64;
+    private static final int CAVE_HEIGHT = CAVE_TOP - CAVE_BOTTOM;
+    private static final int SAMPLE_Y_COUNT = CAVE_HEIGHT / 2;
+    private static final int HAS_CAVES_FLAG = SAMPLE_Y_COUNT + 1;
+    // Lava fills the 8 blocks above bedrock (worldY in [-63, -56]; -64 is bedrock and not carved).
+    private static final int LAVA_TOP = CAVE_BOTTOM + 8;
     private static final boolean ADDITIONAL_WATER_CHECKS = false;
     private static final int SEA_LEVEL = 63;
-    // The 1.16.5 carver assumed bedrock at y=0; in 26.2 bedrock is at y=-64,
-    // so shift the carver's world-Y outputs down by 64 to keep the cave region
-    // in the same position relative to the bedrock floor. The algorithm itself
-    // (sampling, depth tracking, lava check) keeps operating in the original
-    // "internal Y" 0..127 space; only the BlockPos we hand to the chunk gets
-    // translated. localY  -> worldY = localY + Y_OFFSET.
-    private static final int Y_OFFSET = -64;
 
     private WorleyUtil worleyF1divF3;
     private FNL displacementNoisePerlin;
@@ -54,15 +52,12 @@ public class WorldCarverWorley extends WorldCarver<CaveCarverConfiguration> {
     private long initSeed = 0L;
 
     private BlockState lavaBlock = Blocks.LAVA.defaultBlockState();
-    private int maxCaveHeight = 128;
-    private int minCaveHeight = 1;
     private float noiseCutoff = -0.18f;
     private float warpAmplifier = 8.0f;
     private float easeInDepth = 15f;
     private float yCompression = 2.0f;
     private float xzCompression = 1.0f;
     private float surfaceCutoff = -0.081f;
-    private int lavaDepth = 10;
 
     public WorldCarverWorley() {
         super(CaveCarverConfiguration.CODEC);
@@ -77,15 +72,12 @@ public class WorldCarverWorley extends WorldCarver<CaveCarverConfiguration> {
         displacementNoisePerlin.SetNoiseType(FNL.NoiseType.Perlin);
         displacementNoisePerlin.SetFrequency(0.05f);
 
-        maxCaveHeight = SchworliumConfig.maxCaveHeight;
-        minCaveHeight = SchworliumConfig.minCaveHeight;
         noiseCutoff = (float) SchworliumConfig.noiseCutoffValue;
         warpAmplifier = (float) SchworliumConfig.warpAmplifier;
         easeInDepth = (float) SchworliumConfig.easeInDepth;
         yCompression = (float) SchworliumConfig.verticalCompressionMultiplier;
         xzCompression = (float) SchworliumConfig.horizonalCompressionMultiplier;
         surfaceCutoff = (float) SchworliumConfig.surfaceCutoffValue;
-        lavaDepth = SchworliumConfig.lavaDepth;
         lavaBlock = SchworliumConfig.resolveLavaBlock();
 
         initSeed = worldSeed;
@@ -131,7 +123,7 @@ public class WorldCarverWorley extends WorldCarver<CaveCarverConfiguration> {
         float oneQuarter = 0.25F;
         float oneHalf = 0.5F;
         BlockState currentBlock;
-        BlockPos.MutableBlockPos localPos = new BlockPos.MutableBlockPos();
+        BlockPos.MutableBlockPos worldPos = new BlockPos.MutableBlockPos();
         BlockPos.MutableBlockPos abovePos = new BlockPos.MutableBlockPos();
 
         for (int x = 0; x < 4; x++) {
@@ -145,7 +137,7 @@ public class WorldCarverWorley extends WorldCarver<CaveCarverConfiguration> {
                     continue;
                 }
 
-                for (int y = (maxCaveHeight / 2) - 1; y >= 0; y--) {
+                for (int y = SAMPLE_Y_COUNT - 1; y >= 0; y--) {
                     float x0y0z0 = samples[x][y][z];
                     float x0y0z1 = samples[x][y][z + 1];
                     float x1y0z0 = samples[x + 1][y][z];
@@ -166,7 +158,7 @@ public class WorldCarverWorley extends WorldCarver<CaveCarverConfiguration> {
                     float noiseEndX1 = x1y0z1;
 
                     for (int suby = 1; suby >= 0; suby--) {
-                        int localY = suby + y * 2;
+                        int worldY = suby + y * 2 + CAVE_BOTTOM;
                         float noiseStartZ = noiseStartX0;
                         float noiseEndZ = noiseStartX1;
 
@@ -183,12 +175,11 @@ public class WorldCarverWorley extends WorldCarver<CaveCarverConfiguration> {
                                 currentBlock = null;
                                 int worldX = chunkMinX + localX;
                                 int worldZ = chunkMinZ + localZ;
-                                int worldY = localY + Y_OFFSET;
-                                localPos.set(worldX, worldY, worldZ);
+                                worldPos.set(worldX, worldY, worldZ);
 
                                 if (depth == 0) {
                                     if (subx == 0 && subz == 0) {
-                                        currentBlock = chunk.getBlockState(localPos);
+                                        currentBlock = chunk.getBlockState(worldPos);
                                         if (canReplaceBlock(config, currentBlock)) {
                                             depth++;
                                         }
@@ -206,8 +197,8 @@ public class WorldCarverWorley extends WorldCarver<CaveCarverConfiguration> {
                                             (easeInDepth - (float) depth) / easeInDepth);
                                 }
 
-                                if (localY < (minCaveHeight + 5)) {
-                                    adjustedNoiseCutoff += ((minCaveHeight + 5) - localY) * 0.05f;
+                                if (worldY < (CAVE_BOTTOM + 5)) {
+                                    adjustedNoiseCutoff += ((CAVE_BOTTOM + 5) - worldY) * 0.05f;
                                 }
 
                                 if (noiseVal > adjustedNoiseCutoff) {
@@ -215,9 +206,9 @@ public class WorldCarverWorley extends WorldCarver<CaveCarverConfiguration> {
                                     BlockState aboveBlock = chunk.getBlockState(abovePos);
                                     if (aboveBlock == null) aboveBlock = AIR;
 
-                                    if (!isFluidBlock(aboveBlock) || localY <= lavaDepth) {
-                                        if ((depth < easeInDepth || localY > (SEA_LEVEL - 8) || ADDITIONAL_WATER_CHECKS)
-                                                && localY > lavaDepth) {
+                                    if (!isFluidBlock(aboveBlock) || worldY <= LAVA_TOP) {
+                                        if ((depth < easeInDepth || worldY > (SEA_LEVEL - 8) || ADDITIONAL_WATER_CHECKS)
+                                                && worldY > LAVA_TOP) {
                                             if (localX < 15 && isFluidBlock(chunk.getBlockState(abovePos.set(worldX + 1, worldY, worldZ)))) {
                                                 noiseVal += noiseStepZ;
                                                 continue;
@@ -237,10 +228,10 @@ public class WorldCarverWorley extends WorldCarver<CaveCarverConfiguration> {
                                         }
 
                                         if (currentBlock == null) {
-                                            currentBlock = chunk.getBlockState(localPos);
+                                            currentBlock = chunk.getBlockState(worldPos);
                                         }
                                         if (canReplaceBlock(config, currentBlock)) {
-                                            digBlock(chunk, localPos, localY, aboveBlock);
+                                            digBlock(chunk, worldPos, worldY, aboveBlock);
                                         }
                                     }
                                 }
@@ -263,8 +254,7 @@ public class WorldCarverWorley extends WorldCarver<CaveCarverConfiguration> {
     }
 
     private float[][][] sampleNoise(int chunkX, int chunkZ, int maxSurfaceHeight) {
-        int originalMaxHeight = 128;
-        float[][][] noiseSamples = new float[5][130][5];
+        float[][][] noiseSamples = new float[5][SAMPLE_Y_COUNT + 2][5];
         float noise;
         for (int x = 0; x < 5; x++) {
             int realX = x * 4 + chunkX * 16;
@@ -272,12 +262,12 @@ public class WorldCarverWorley extends WorldCarver<CaveCarverConfiguration> {
                 int realZ = z * 4 + chunkZ * 16;
                 boolean columnHasCaveFlag = false;
 
-                for (int y = 128; y >= 0; y--) {
-                    float realY = y * 2;
-                    if (realY > maxSurfaceHeight || realY > maxCaveHeight || realY < minCaveHeight) {
+                for (int y = SAMPLE_Y_COUNT; y >= 0; y--) {
+                    int worldY = y * 2 + CAVE_BOTTOM;
+                    if (worldY > maxSurfaceHeight) {
                         noiseSamples[x][y][z] = -1.1F;
                     } else {
-                        float dispAmp = (float) (warpAmplifier * ((originalMaxHeight - y) / (originalMaxHeight * 0.85)));
+                        float dispAmp = (float) (warpAmplifier * ((CAVE_TOP - worldY) / (CAVE_HEIGHT * 0.85)));
 
                         float xDisp = displacementNoisePerlin.GetNoise(realX, realZ) * dispAmp;
                         float yDisp = displacementNoisePerlin.GetNoise(realX, realZ + 67.0f) * dispAmp;
@@ -285,7 +275,7 @@ public class WorldCarverWorley extends WorldCarver<CaveCarverConfiguration> {
 
                         noise = worleyF1divF3.SingleCellular3Edge(
                                 realX * xzCompression + xDisp,
-                                realY * yCompression + yDisp,
+                                worldY * yCompression + yDisp,
                                 realZ * xzCompression + zDisp);
                         noiseSamples[x][y][z] = noise;
 
@@ -298,12 +288,12 @@ public class WorldCarverWorley extends WorldCarver<CaveCarverConfiguration> {
                                 noiseSamples[x][y][z - 1] = (noise * 0.2f) + (noiseSamples[x][y][z - 1] * 0.8f);
                             }
 
-                            if (y < 128) {
+                            if (y < SAMPLE_Y_COUNT) {
                                 float noiseAbove = noiseSamples[x][y + 1][z];
                                 if (noise > noiseAbove) {
                                     noiseSamples[x][y + 1][z] = (noise * 0.8F) + (noiseAbove * 0.2F);
                                 }
-                                if (y < 127) {
+                                if (y < SAMPLE_Y_COUNT - 1) {
                                     float noiseTwoAbove = noiseSamples[x][y + 2][z];
                                     if (noise > noiseTwoAbove) {
                                         noiseSamples[x][y + 2][z] = (noise * 0.35F) + (noiseTwoAbove * 0.65F);
@@ -320,16 +310,14 @@ public class WorldCarverWorley extends WorldCarver<CaveCarverConfiguration> {
     }
 
     // 6-point hexagon sample of the surface heightmap, matching the original carver.
-    // Result is returned in the carver's internal Y space (so it can be compared
-    // against maxCaveHeight directly), i.e. world Y shifted up by -Y_OFFSET.
     private int getMaxSurfaceHeight(ChunkAccess chunk) {
-        int max = 0;
+        int max = CAVE_BOTTOM;
         int[][] testCoords = {{2, 6}, {3, 11}, {7, 2}, {9, 13}, {12, 4}, {13, 9}};
         for (int[] c : testCoords) {
-            int h = chunk.getHeight(Heightmap.Types.WORLD_SURFACE_WG, c[0], c[1]) - Y_OFFSET;
+            int h = chunk.getHeight(Heightmap.Types.WORLD_SURFACE_WG, c[0], c[1]);
             if (h > max) {
                 max = h;
-                if (max > maxCaveHeight) return max;
+                if (max > CAVE_TOP) return max;
             }
         }
         return max;
@@ -339,10 +327,8 @@ public class WorldCarverWorley extends WorldCarver<CaveCarverConfiguration> {
         return state != null && !state.getFluidState().isEmpty();
     }
 
-    // pos is already in world-Y space; localY is the algorithm's internal Y used
-    // for the lava-depth comparison (which is also in internal-Y space).
-    private void digBlock(ChunkAccess chunk, BlockPos pos, int localY, BlockState aboveBlock) {
-        if (localY <= lavaDepth) {
+    private void digBlock(ChunkAccess chunk, BlockPos pos, int worldY, BlockState aboveBlock) {
+        if (worldY <= LAVA_TOP) {
             chunk.setBlockState(pos, lavaBlock, 0);
             return;
         }
