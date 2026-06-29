@@ -27,6 +27,19 @@ import java.util.function.Function;
  * depended on the pre-1.18 SurfaceBuilder API (top/filler block restoration in
  * digBlock) has been dropped because that API no longer exists; vanilla
  * carvers in 1.21+ do not perform that restoration either.
+ *
+ * Cave-shape evaluation samples the Worley noise PER BLOCK rather than on a
+ * coarse 5x5x97 grid with linear interpolation (as the original WorleyCaves
+ * does). The vanilla-era lerp trick was a cost-saving measure that has the
+ * visible side effect of facetting the noise field along the grid corners:
+ * Worley noise changes sharply at cell boundaries, so a 4-block linear
+ * interpolation produces planar gradients that the threshold cut turns into
+ * staircase edges along the chunk subdivisions. Per-block sampling matches
+ * the smoothness the sister Worlium mod gets by running the same noise
+ * function inside Minecraft's density-function pipeline.
+ *
+ * The warp-amplitude and threshold-easing formulas are ported verbatim from
+ * Worlium so cave shapes match block-for-block for a given seed.
  */
 public class WorldCarverWorley extends WorldCarver<CaveCarverConfiguration> {
 
@@ -38,13 +51,14 @@ public class WorldCarverWorley extends WorldCarver<CaveCarverConfiguration> {
 
     private static final int CAVE_TOP = 128;
     private static final int CAVE_BOTTOM = -64;
-    private static final int CAVE_HEIGHT = CAVE_TOP - CAVE_BOTTOM;
-    private static final int SAMPLE_Y_COUNT = CAVE_HEIGHT / 2;
-    private static final int HAS_CAVES_FLAG = SAMPLE_Y_COUNT + 1;
     // Lava fills the 8 blocks above bedrock (worldY in [-63, -56]; -64 is bedrock and not carved).
     private static final int LAVA_TOP = CAVE_BOTTOM + 8;
     private static final boolean ADDITIONAL_WATER_CHECKS = false;
     private static final int SEA_LEVEL = 63;
+    // Floor softening — below this Y the cutoff is biased back toward solid so caves taper out
+    // before slicing into bedrock. Matches Worlium's MIN_CAVE_HEIGHT + 5 constant.
+    private static final int FLOOR_SOFTEN_TOP = CAVE_BOTTOM + 5;
+    private static final float FLOOR_SOFTEN_PER_BLOCK = 0.05f;
 
     private WorleyUtil worleyF1divF3;
     private FNL displacementNoisePerlin;
@@ -115,198 +129,91 @@ public class WorldCarverWorley extends WorldCarver<CaveCarverConfiguration> {
     private void carveWorleyCaves(ChunkAccess chunk, CaveCarverConfiguration config, ChunkPos chunkPos) {
         int chunkMinX = chunkPos.getMinBlockX();
         int chunkMinZ = chunkPos.getMinBlockZ();
-        int chunkX = chunkMinX >> 4;
-        int chunkZ = chunkMinZ >> 4;
+        int chunkMaxHeight = Math.min(getMaxSurfaceHeight(chunk), CAVE_TOP);
+        if (chunkMaxHeight <= CAVE_BOTTOM) return;
 
-        int chunkMaxHeight = getMaxSurfaceHeight(chunk);
-        float[][][] samples = sampleNoise(chunkX, chunkZ, chunkMaxHeight + 1);
-        float oneQuarter = 0.25F;
-        float oneHalf = 0.5F;
-        BlockState currentBlock;
         BlockPos.MutableBlockPos worldPos = new BlockPos.MutableBlockPos();
         BlockPos.MutableBlockPos abovePos = new BlockPos.MutableBlockPos();
+        BlockPos.MutableBlockPos neighborPos = new BlockPos.MutableBlockPos();
 
-        for (int x = 0; x < 4; x++) {
-            for (int z = 0; z < 4; z++) {
+        float dispDenom = CAVE_TOP * 0.85f;
+        float surfaceStart = CAVE_TOP - easeInDepth;
+
+        for (int localX = 0; localX < 16; localX++) {
+            int worldX = chunkMinX + localX;
+            for (int localZ = 0; localZ < 16; localZ++) {
+                int worldZ = chunkMinZ + localZ;
                 int depth = 0;
 
-                if (samples[x][HAS_CAVES_FLAG][z] == 0
-                        && samples[x + 1][HAS_CAVES_FLAG][z] == 0
-                        && samples[x][HAS_CAVES_FLAG][z + 1] == 0
-                        && samples[x + 1][HAS_CAVES_FLAG][z + 1] == 0) {
-                    continue;
-                }
+                // The Perlin warp depends only on (x, z); precompute the base sample once per
+                // column and multiply by the per-Y dispAmp inside the loop. Same math, ~3x fewer
+                // Perlin lookups than computing fresh for every block.
+                float warpBaseX = displacementNoisePerlin.GetNoise(worldX, worldZ);
+                float warpBaseY = displacementNoisePerlin.GetNoise(worldX, worldZ + 67.0f);
+                float warpBaseZ = displacementNoisePerlin.GetNoise(worldX, worldZ + 149.0f);
 
-                for (int y = SAMPLE_Y_COUNT - 1; y >= 0; y--) {
-                    float x0y0z0 = samples[x][y][z];
-                    float x0y0z1 = samples[x][y][z + 1];
-                    float x1y0z0 = samples[x + 1][y][z];
-                    float x1y0z1 = samples[x + 1][y][z + 1];
-                    float x0y1z0 = samples[x][y + 1][z];
-                    float x0y1z1 = samples[x][y + 1][z + 1];
-                    float x1y1z0 = samples[x + 1][y + 1][z];
-                    float x1y1z1 = samples[x + 1][y + 1][z + 1];
+                for (int worldY = chunkMaxHeight; worldY > CAVE_BOTTOM; worldY--) {
+                    worldPos.set(worldX, worldY, worldZ);
+                    BlockState currentBlock = chunk.getBlockState(worldPos);
 
-                    float noiseStepY00 = (x0y1z0 - x0y0z0) * -oneHalf;
-                    float noiseStepY01 = (x0y1z1 - x0y0z1) * -oneHalf;
-                    float noiseStepY10 = (x1y1z0 - x1y0z0) * -oneHalf;
-                    float noiseStepY11 = (x1y1z1 - x1y0z1) * -oneHalf;
-
-                    float noiseStartX0 = x0y0z0;
-                    float noiseStartX1 = x0y0z1;
-                    float noiseEndX0 = x1y0z0;
-                    float noiseEndX1 = x1y0z1;
-
-                    for (int suby = 1; suby >= 0; suby--) {
-                        int worldY = suby + y * 2 + CAVE_BOTTOM;
-                        float noiseStartZ = noiseStartX0;
-                        float noiseEndZ = noiseStartX1;
-
-                        float noiseStepX0 = (noiseEndX0 - noiseStartX0) * oneQuarter;
-                        float noiseStepX1 = (noiseEndX1 - noiseStartX1) * oneQuarter;
-
-                        for (int subx = 0; subx < 4; subx++) {
-                            int localX = subx + x * 4;
-                            float noiseStepZ = (noiseEndZ - noiseStartZ) * oneQuarter;
-                            float noiseVal = noiseStartZ;
-
-                            for (int subz = 0; subz < 4; subz++) {
-                                int localZ = subz + z * 4;
-                                currentBlock = null;
-                                int worldX = chunkMinX + localX;
-                                int worldZ = chunkMinZ + localZ;
-                                worldPos.set(worldX, worldY, worldZ);
-
-                                if (depth == 0) {
-                                    if (subx == 0 && subz == 0) {
-                                        currentBlock = chunk.getBlockState(worldPos);
-                                        if (canReplaceBlock(config, currentBlock)) {
-                                            depth++;
-                                        }
-                                    } else {
-                                        continue;
-                                    }
-                                } else if (subx == 0 && subz == 0) {
-                                    depth++;
-                                }
-
-                                float adjustedNoiseCutoff = noiseCutoff;
-                                if (depth < easeInDepth) {
-                                    adjustedNoiseCutoff = (float) Mth.clampedLerp(
-                                            noiseCutoff, surfaceCutoff,
-                                            (easeInDepth - (float) depth) / easeInDepth);
-                                }
-
-                                if (worldY < (CAVE_BOTTOM + 5)) {
-                                    adjustedNoiseCutoff += ((CAVE_BOTTOM + 5) - worldY) * 0.05f;
-                                }
-
-                                if (noiseVal > adjustedNoiseCutoff) {
-                                    abovePos.set(worldX, worldY + 1, worldZ);
-                                    BlockState aboveBlock = chunk.getBlockState(abovePos);
-                                    if (aboveBlock == null) aboveBlock = AIR;
-
-                                    if (!isFluidBlock(aboveBlock) || worldY <= LAVA_TOP) {
-                                        if ((depth < easeInDepth || worldY > (SEA_LEVEL - 8) || ADDITIONAL_WATER_CHECKS)
-                                                && worldY > LAVA_TOP) {
-                                            if (localX < 15 && isFluidBlock(chunk.getBlockState(abovePos.set(worldX + 1, worldY, worldZ)))) {
-                                                noiseVal += noiseStepZ;
-                                                continue;
-                                            }
-                                            if (localX > 0 && isFluidBlock(chunk.getBlockState(abovePos.set(worldX - 1, worldY, worldZ)))) {
-                                                noiseVal += noiseStepZ;
-                                                continue;
-                                            }
-                                            if (localZ < 15 && isFluidBlock(chunk.getBlockState(abovePos.set(worldX, worldY, worldZ + 1)))) {
-                                                noiseVal += noiseStepZ;
-                                                continue;
-                                            }
-                                            if (localZ > 0 && isFluidBlock(chunk.getBlockState(abovePos.set(worldX, worldY, worldZ - 1)))) {
-                                                noiseVal += noiseStepZ;
-                                                continue;
-                                            }
-                                        }
-
-                                        if (currentBlock == null) {
-                                            currentBlock = chunk.getBlockState(worldPos);
-                                        }
-                                        if (canReplaceBlock(config, currentBlock)) {
-                                            digBlock(chunk, worldPos, worldY, aboveBlock);
-                                        }
-                                    }
-                                }
-
-                                noiseVal += noiseStepZ;
-                            }
-
-                            noiseStartZ += noiseStepX0;
-                            noiseEndZ += noiseStepX1;
-                        }
-
-                        noiseStartX0 += noiseStepY00;
-                        noiseStartX1 += noiseStepY01;
-                        noiseEndX0 += noiseStepY10;
-                        noiseEndX1 += noiseStepY11;
-                    }
-                }
-            }
-        }
-    }
-
-    private float[][][] sampleNoise(int chunkX, int chunkZ, int maxSurfaceHeight) {
-        float[][][] noiseSamples = new float[5][SAMPLE_Y_COUNT + 2][5];
-        float noise;
-        for (int x = 0; x < 5; x++) {
-            int realX = x * 4 + chunkX * 16;
-            for (int z = 0; z < 5; z++) {
-                int realZ = z * 4 + chunkZ * 16;
-                boolean columnHasCaveFlag = false;
-
-                for (int y = SAMPLE_Y_COUNT; y >= 0; y--) {
-                    int worldY = y * 2 + CAVE_BOTTOM;
-                    if (worldY > maxSurfaceHeight) {
-                        noiseSamples[x][y][z] = -1.1F;
+                    // Depth tracks blocks descended since the column's first replaceable block.
+                    // Used by the fluid-adjacency safety check below.
+                    if (depth == 0) {
+                        if (!canReplaceBlock(config, currentBlock)) continue;
+                        depth = 1;
                     } else {
-                        float dispAmp = (float) (warpAmplifier * ((CAVE_TOP - worldY) / (CAVE_HEIGHT * 0.85)));
+                        depth++;
+                    }
 
-                        float xDisp = displacementNoisePerlin.GetNoise(realX, realZ) * dispAmp;
-                        float yDisp = displacementNoisePerlin.GetNoise(realX, realZ + 67.0f) * dispAmp;
-                        float zDisp = displacementNoisePerlin.GetNoise(realX, realZ + 149.0f) * dispAmp;
+                    float adjustedNoiseCutoff = noiseCutoff;
+                    if (worldY > surfaceStart) {
+                        float t = (worldY - surfaceStart) / easeInDepth;
+                        adjustedNoiseCutoff = Mth.lerp(t, noiseCutoff, surfaceCutoff);
+                    }
+                    if (worldY < FLOOR_SOFTEN_TOP) {
+                        adjustedNoiseCutoff += (FLOOR_SOFTEN_TOP - worldY) * FLOOR_SOFTEN_PER_BLOCK;
+                    }
 
-                        noise = worleyF1divF3.SingleCellular3Edge(
-                                realX * xzCompression + xDisp,
-                                worldY * yCompression + yDisp,
-                                realZ * xzCompression + zDisp);
-                        noiseSamples[x][y][z] = noise;
+                    // Worlium's warp amplitude: clamped at Y=1 so the extended floor mirrors the
+                    // reference's deepest warp (~9.37) rather than extrapolating past Y=1.
+                    int ampY = worldY < 1 ? 1 : worldY;
+                    float dispAmp = warpAmplifier * ((CAVE_TOP - ampY * 0.5f) / dispDenom);
 
-                        if (noise > noiseCutoff) {
-                            columnHasCaveFlag = true;
-                            if (x > 0) {
-                                noiseSamples[x - 1][y][z] = (noise * 0.2f) + (noiseSamples[x - 1][y][z] * 0.8f);
-                            }
-                            if (z > 0) {
-                                noiseSamples[x][y][z - 1] = (noise * 0.2f) + (noiseSamples[x][y][z - 1] * 0.8f);
-                            }
+                    float noise = worleyF1divF3.SingleCellular3Edge(
+                            worldX * xzCompression + warpBaseX * dispAmp,
+                            worldY * yCompression + warpBaseY * dispAmp,
+                            worldZ * xzCompression + warpBaseZ * dispAmp);
 
-                            if (y < SAMPLE_Y_COUNT) {
-                                float noiseAbove = noiseSamples[x][y + 1][z];
-                                if (noise > noiseAbove) {
-                                    noiseSamples[x][y + 1][z] = (noise * 0.8F) + (noiseAbove * 0.2F);
-                                }
-                                if (y < SAMPLE_Y_COUNT - 1) {
-                                    float noiseTwoAbove = noiseSamples[x][y + 2][z];
-                                    if (noise > noiseTwoAbove) {
-                                        noiseSamples[x][y + 2][z] = (noise * 0.35F) + (noiseTwoAbove * 0.65F);
-                                    }
-                                }
-                            }
-                        }
+                    if (noise <= adjustedNoiseCutoff) continue;
+
+                    abovePos.set(worldX, worldY + 1, worldZ);
+                    BlockState aboveBlock = chunk.getBlockState(abovePos);
+                    if (aboveBlock == null) aboveBlock = AIR;
+
+                    if (isFluidBlock(aboveBlock) && worldY > LAVA_TOP) continue;
+
+                    if ((depth < easeInDepth || worldY > (SEA_LEVEL - 8) || ADDITIONAL_WATER_CHECKS)
+                            && worldY > LAVA_TOP) {
+                        if (localX < 15
+                                && isFluidBlock(chunk.getBlockState(neighborPos.set(worldX + 1, worldY, worldZ))))
+                            continue;
+                        if (localX > 0
+                                && isFluidBlock(chunk.getBlockState(neighborPos.set(worldX - 1, worldY, worldZ))))
+                            continue;
+                        if (localZ < 15
+                                && isFluidBlock(chunk.getBlockState(neighborPos.set(worldX, worldY, worldZ + 1))))
+                            continue;
+                        if (localZ > 0
+                                && isFluidBlock(chunk.getBlockState(neighborPos.set(worldX, worldY, worldZ - 1))))
+                            continue;
+                    }
+
+                    if (canReplaceBlock(config, currentBlock)) {
+                        digBlock(chunk, worldPos, worldY, aboveBlock);
                     }
                 }
-                noiseSamples[x][HAS_CAVES_FLAG][z] = columnHasCaveFlag ? 1 : 0;
             }
         }
-        return noiseSamples;
     }
 
     // 6-point hexagon sample of the surface heightmap, matching the original carver.
