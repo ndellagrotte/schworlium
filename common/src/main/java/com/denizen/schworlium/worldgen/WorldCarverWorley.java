@@ -63,7 +63,6 @@ public class WorldCarverWorley extends WorldCarver<CaveCarverConfiguration> {
     private WorleyUtil worleyF1divF3;
     private FNL displacementNoisePerlin;
     private volatile boolean initialized = false;
-    private long initSeed = 0L;
 
     private BlockState lavaBlock = Blocks.LAVA.defaultBlockState();
     private float noiseCutoff = -0.18f;
@@ -94,7 +93,6 @@ public class WorldCarverWorley extends WorldCarver<CaveCarverConfiguration> {
         surfaceCutoff = (float) SchworliumConfig.surfaceCutoffValue;
         lavaBlock = SchworliumConfig.resolveLavaBlock();
 
-        initSeed = worldSeed;
         initialized = true;
     }
 
@@ -176,7 +174,7 @@ public class WorldCarverWorley extends WorldCarver<CaveCarverConfiguration> {
 
                     // Worlium's warp amplitude: clamped at Y=1 so the extended floor mirrors the
                     // reference's deepest warp (~9.37) rather than extrapolating past Y=1.
-                    int ampY = worldY < 1 ? 1 : worldY;
+                    int ampY = Math.max(worldY, 1);
                     float dispAmp = warpAmplifier * ((CAVE_TOP - ampY * 0.5f) / dispDenom);
 
                     float noise = worleyF1divF3.SingleCellular3Edge(
