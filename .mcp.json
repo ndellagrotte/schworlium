@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "mcmodding": {
+      "command": "mcmodding-mcp"
+    },
+    "idea": {
+      "url": "http://127.0.0.1:64342/sse",
+      "type": "sse"
+    }
+  }
+}
