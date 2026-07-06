@@ -42,7 +42,6 @@ neoForge {
 sourceSets.main.resources { srcDir 'src/generated/resources' }
 
 dependencies {
-    implementation("maven.modrinth:lithostitched:${lithostitched_neoforge_version}")
     compileOnly("maven.modrinth:moderner-beta:${moderner_beta_neoforge_version}")
 }
 

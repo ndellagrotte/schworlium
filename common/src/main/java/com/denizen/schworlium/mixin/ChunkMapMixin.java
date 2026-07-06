@@ -29,9 +29,9 @@ import org.spongepowered.asm.mixin.injection.At;
  * swapping the noise router's final_density for schworlium:overworld_no_noise_caves_final_density
  * when the overworld's RandomState is built.
  *
- * This used to be a lithostitched wrap_noise_router worldgen modifier, but lithostitched
- * (through at least 1.7.12) parses that modifier's "dimension" field without ever consulting
- * it: its ChunkMapMixin applies every wrap_noise_router modifier to every ServerLevel, which
+ * This used to be a third-party wrap_noise_router worldgen modifier, but that library
+ * (through at least 1.7.12) parsed the modifier's "dimension" field without ever consulting
+ * it: its ChunkMapMixin applied every wrap_noise_router modifier to every ServerLevel, which
  * leaked the overworld-only final_density replacement into the nether and end. Wrapping the
  * same operation ourselves lets us gate on the level actually being the overworld.
  *

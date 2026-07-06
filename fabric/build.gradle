@@ -6,7 +6,6 @@ dependencies {
     minecraft("com.mojang:minecraft:${minecraft_version}")
     implementation("net.fabricmc:fabric-loader:${fabric_loader_version}")
     implementation("net.fabricmc.fabric-api:fabric-api:${fabric_version}")
-    implementation("maven.modrinth:lithostitched:${lithostitched_fabric_version}")
     compileOnly("maven.modrinth:moderner-beta:${moderner_beta_fabric_version}")
 }
 
