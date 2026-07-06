@@ -2,7 +2,6 @@ package com.denizen.schworlium.worldgen;
 
 import com.denizen.schworlium.config.SchworliumConfig;
 import com.denizen.schworlium.util.WorldSeedHolder;
-import dev.worldgen.lithostitched.api.worldgen.densityfunction.fastnoise.FNL;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Holder;
 import net.minecraft.util.Mth;
@@ -61,7 +60,7 @@ public class WorldCarverWorley extends WorldCarver<CaveCarverConfiguration> {
     private static final float FLOOR_SOFTEN_PER_BLOCK = 0.05f;
 
     private WorleyUtil worleyF1divF3;
-    private FNL displacementNoisePerlin;
+    private FastNoise displacementNoisePerlin;
     private volatile boolean initialized = false;
 
     private BlockState lavaBlock = Blocks.LAVA.defaultBlockState();
@@ -80,9 +79,9 @@ public class WorldCarverWorley extends WorldCarver<CaveCarverConfiguration> {
         worleyF1divF3 = new WorleyUtil((int) worldSeed);
         worleyF1divF3.SetFrequency(0.016f);
 
-        displacementNoisePerlin = new FNL();
+        displacementNoisePerlin = new FastNoise();
         displacementNoisePerlin.SetSeed((int) worldSeed);
-        displacementNoisePerlin.SetNoiseType(FNL.NoiseType.Perlin);
+        displacementNoisePerlin.SetNoiseType(FastNoise.NoiseType.Perlin);
         displacementNoisePerlin.SetFrequency(0.05f);
 
         noiseCutoff = (float) SchworliumConfig.noiseCutoffValue;
