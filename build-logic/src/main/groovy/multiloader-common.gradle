@@ -59,10 +59,8 @@ processResources {
             'neoforge_loader_version_range': neoforge_loader_version_range,
             'credits'                      : credits,
             'java_version'                 : java_version,
-            'lithostitched_fabric_version' : lithostitched_fabric_version,
-            'lithostitched_neoforge_version': lithostitched_neoforge_version,
             'parchment_minecraft'          : parchment_minecraft,
-            'parchment_version'          : parchment_version
+            'parchment_version'            : parchment_version
 
     ]
 
