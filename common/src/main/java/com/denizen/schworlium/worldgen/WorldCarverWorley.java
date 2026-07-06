@@ -60,7 +60,7 @@ public class WorldCarverWorley extends WorldCarver<CaveCarverConfiguration> {
     private static final float FLOOR_SOFTEN_PER_BLOCK = 0.05f;
 
     private WorleyUtil worleyF1divF3;
-    private FastNoise displacementNoisePerlin;
+    private FastNoiseLite displacementNoisePerlin;
     private volatile boolean initialized = false;
 
     private BlockState lavaBlock = Blocks.LAVA.defaultBlockState();
@@ -79,9 +79,9 @@ public class WorldCarverWorley extends WorldCarver<CaveCarverConfiguration> {
         worleyF1divF3 = new WorleyUtil((int) worldSeed);
         worleyF1divF3.SetFrequency(0.016f);
 
-        displacementNoisePerlin = new FastNoise();
+        displacementNoisePerlin = new FastNoiseLite();
         displacementNoisePerlin.SetSeed((int) worldSeed);
-        displacementNoisePerlin.SetNoiseType(FastNoise.NoiseType.Perlin);
+        displacementNoisePerlin.SetNoiseType(FastNoiseLite.NoiseType.Perlin);
         displacementNoisePerlin.SetFrequency(0.05f);
 
         noiseCutoff = (float) SchworliumConfig.noiseCutoffValue;
