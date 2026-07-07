@@ -1,10 +1,12 @@
 package com.denizen.schworlium.mixin;
 
 import com.denizen.schworlium.Constants;
+import com.denizen.schworlium.worldgen.TectonicCompat;
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
 import com.llamalad7.mixinextras.sugar.Local;
 import net.minecraft.core.HolderGetter;
+import net.minecraft.core.RegistryAccess;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.Identifier;
 import net.minecraft.resources.ResourceKey;
@@ -27,15 +29,19 @@ import org.spongepowered.asm.mixin.injection.At;
  * swapping the noise router's final_density for schworlium:overworld_no_noise_caves_final_density
  * when the overworld's RandomState is built.
  *
- * This used to be a lithostitched wrap_noise_router worldgen modifier, but lithostitched
- * (through at least 1.7.12) parses that modifier's "dimension" field without ever consulting
- * it: its ChunkMapMixin applies every wrap_noise_router modifier to every ServerLevel, which
+ * This used to be a third-party wrap_noise_router worldgen modifier, but that library
+ * (through at least 1.7.12) parsed the modifier's "dimension" field without ever consulting
+ * it: its ChunkMapMixin applied every wrap_noise_router modifier to every ServerLevel, which
  * leaked the overworld-only final_density replacement into the nether and end. Wrapping the
  * same operation ourselves lets us gate on the level actually being the overworld.
  *
  * Gated on the generator using the minecraft:overworld noise settings (not just the dimension
  * key) so amplified/large-biomes presets and custom overworld generators — whose terrain math
  * the replacement formula does not match — keep their vanilla routers.
+ *
+ * Tectonic also reuses the minecraft:overworld settings key, so this fires under it too; there we
+ * substitute a Tectonic-shaped final_density (see TectonicCompat) instead of the vanilla one so
+ * Tectonic's terrain, underground rivers and lava tunnels survive while its cave noise is removed.
  */
 @Mixin(ChunkMap.class)
 public abstract class ChunkMapMixin {
@@ -61,11 +67,19 @@ public abstract class ChunkMapMixin {
         if (level.dimension().equals(Level.OVERWORLD)
                 && generator instanceof NoiseBasedChunkGenerator noiseGenerator
                 && noiseGenerator.generatorSettings().is(NoiseGeneratorSettings.OVERWORLD)) {
-            DensityFunction replacement = level.registryAccess()
-                    .lookupOrThrow(Registries.DENSITY_FUNCTION)
-                    .getValueOrThrow(SCHWORLIUM$NO_NOISE_CAVES_FINAL_DENSITY);
+            RegistryAccess registryAccess = level.registryAccess();
+            DensityFunction replacement;
+            if (TectonicCompat.isTectonicOverworld(registryAccess)) {
+                replacement = TectonicCompat.buildStrippedFinalDensity(registryAccess);
+                Constants.LOG.info("Disabled noise caves in Tectonic's overworld noise router "
+                        + "(kept terrain, underground rivers and lava tunnels)");
+            } else {
+                replacement = registryAccess
+                        .lookupOrThrow(Registries.DENSITY_FUNCTION)
+                        .getValueOrThrow(SCHWORLIUM$NO_NOISE_CAVES_FINAL_DENSITY);
+                Constants.LOG.info("Disabled vanilla noise caves in the overworld noise router");
+            }
             settings = schworlium$withFinalDensity(settings, replacement);
-            Constants.LOG.info("Disabled vanilla noise caves in the overworld noise router");
         }
         return original.call(settings, noises, seed);
     }
