@@ -26,6 +26,7 @@ public final class SchworliumConfig {
     public static double verticalCompressionMultiplier = 2.0;
     public static double horizonalCompressionMultiplier = 1.0;
     public static double warpAmplifier = 8.0;
+    public static boolean modernerBetaCompat = true;
 
     private static boolean loaded = false;
 
@@ -56,6 +57,7 @@ public final class SchworliumConfig {
             verticalCompressionMultiplier = readDouble(obj, "verticalCompressionMultiplier", verticalCompressionMultiplier);
             horizonalCompressionMultiplier = readDouble(obj, "horizonalCompressionMultiplier", horizonalCompressionMultiplier);
             warpAmplifier = readDouble(obj, "warpAmplifier", warpAmplifier);
+            modernerBetaCompat = readBoolean(obj, "modernerBetaCompat", modernerBetaCompat);
         } catch (Exception e) {
             Constants.LOG.warn("Failed to parse schworlium.json; using defaults", e);
         }
@@ -86,6 +88,7 @@ public final class SchworliumConfig {
             obj.addProperty("verticalCompressionMultiplier", verticalCompressionMultiplier);
             obj.addProperty("horizonalCompressionMultiplier", horizonalCompressionMultiplier);
             obj.addProperty("warpAmplifier", warpAmplifier);
+            obj.addProperty("modernerBetaCompat", modernerBetaCompat);
             Gson gson = new GsonBuilder().setPrettyPrinting().create();
             Files.writeString(file, gson.toJson(obj));
         } catch (IOException e) {
@@ -103,5 +106,9 @@ public final class SchworliumConfig {
 
     private static String readString(JsonObject o, String key, String defaultValue) {
         return o.has(key) && o.get(key).isJsonPrimitive() ? o.get(key).getAsString() : defaultValue;
+    }
+
+    private static boolean readBoolean(JsonObject o, String key, boolean defaultValue) {
+        return o.has(key) && o.get(key).isJsonPrimitive() ? o.get(key).getAsBoolean() : defaultValue;
     }
 }
