@@ -18,7 +18,8 @@
     },
     "mixins": [
         "schworlium.mixins.json",
-        "schworlium.fabric.mixins.json"
+        "schworlium.fabric.mixins.json",
+        "schworlium-modernerbeta.mixins.json"
     ],
     "depends": {
         "fabricloader": ">=${fabric_loader_version}",
