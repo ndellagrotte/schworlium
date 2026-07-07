@@ -17,8 +17,8 @@
         ]
     },
     "mixins": [
-        "${mod_id}.mixins.json",
-        "${mod_id}.fabric.mixins.json"
+        "schworlium.mixins.json",
+        "schworlium.fabric.mixins.json"
     ],
     "depends": {
         "fabricloader": ">=${fabric_loader_version}",
