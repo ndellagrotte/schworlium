@@ -1,0 +1,16 @@
+{
+  "required": false,
+  "minVersion": "0.8",
+  "package": "com.denizen.schworlium.modernerbeta_mixin",
+  "compatibilityLevel": "JAVA_25",
+  "mixins": [
+    "ChunkProviderMixin",
+    "ChunkProviderNoiseMixin",
+    "ModernBetaChunkGeneratorMixin"
+  ],
+  "client": [],
+  "server": [],
+  "injectors": {
+    "defaultRequire": 0
+  }
+}
