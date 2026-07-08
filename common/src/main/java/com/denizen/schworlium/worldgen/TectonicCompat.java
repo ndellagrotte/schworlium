@@ -111,6 +111,7 @@ public final class TectonicCompat {
         JsonElement json = JsonParser.parseString(STRIPPED_FINAL_DENSITY_JSON);
         RegistryOps<JsonElement> ops = RegistryOps.create(JsonOps.INSTANCE, registryAccess);
         DataResult<DensityFunction> parsed = DensityFunction.DIRECT_CODEC.parse(ops, json);
+        // 26.1 branch uses CODEC
         parsed.error().ifPresent(err ->
                 Constants.LOG.error("Failed to decode Tectonic-compatible final_density: {}", err.message()));
         return parsed.result().orElseThrow(() ->
