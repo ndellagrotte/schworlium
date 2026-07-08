@@ -2,7 +2,7 @@
   "required": false,
   "minVersion": "0.8",
   "package": "com.denizen.schworlium.modernerbeta_mixin",
-  "compatibilityLevel": "JAVA_25",
+  "compatibilityLevel": "JAVA_21",
   "mixins": [
     "ChunkProviderMixin",
     "ChunkProviderNoiseMixin",
