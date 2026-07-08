@@ -89,7 +89,7 @@ public final class SchworliumConfig {
             return Blocks.LAVA.defaultBlockState();
         }
         Block block = BuiltInRegistries.BLOCK.getValue(id);
-        if (block == null || block == Blocks.AIR) {
+        if (block == Blocks.AIR) {
             Constants.LOG.warn("Unknown lavaBlock id: {}; falling back to minecraft:lava", lavaBlock);
             return Blocks.LAVA.defaultBlockState();
         }
