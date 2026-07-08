@@ -5,6 +5,7 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonParser;
 import com.mojang.serialization.DataResult;
 import com.mojang.serialization.JsonOps;
+import net.minecraft.core.Holder;
 import net.minecraft.core.RegistryAccess;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.Identifier;
@@ -110,10 +111,10 @@ public final class TectonicCompat {
     public static DensityFunction buildStrippedFinalDensity(RegistryAccess registryAccess) {
         JsonElement json = JsonParser.parseString(STRIPPED_FINAL_DENSITY_JSON);
         RegistryOps<JsonElement> ops = RegistryOps.create(JsonOps.INSTANCE, registryAccess);
-        DataResult<DensityFunction> parsed = DensityFunction.CODEC.parse(ops, json);
+        DataResult<Holder<DensityFunction>> parsed = DensityFunction.CODEC.parse(ops, json);
         parsed.error().ifPresent(err ->
                 Constants.LOG.error("Failed to decode Tectonic-compatible final_density: {}", err.message()));
         return parsed.result().orElseThrow(() ->
-                new IllegalStateException("Failed to decode Tectonic-compatible final_density"));
+                new IllegalStateException("Failed to decode Tectonic-compatible final_density")).value();
     }
 }
