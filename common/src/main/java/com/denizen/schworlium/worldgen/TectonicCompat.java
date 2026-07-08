@@ -110,7 +110,8 @@ public final class TectonicCompat {
     public static DensityFunction buildStrippedFinalDensity(RegistryAccess registryAccess) {
         JsonElement json = JsonParser.parseString(STRIPPED_FINAL_DENSITY_JSON);
         RegistryOps<JsonElement> ops = RegistryOps.create(JsonOps.INSTANCE, registryAccess);
-        DataResult<DensityFunction> parsed = DensityFunction.DIRECT_CODEC.parse(ops, json);
+        DataResult<DensityFunction> parsed = DensityFunction.CODEC.parse(ops, json);
+        // 1.21.11 branch uses DIRECT_CODEC
         parsed.error().ifPresent(err ->
                 Constants.LOG.error("Failed to decode Tectonic-compatible final_density: {}", err.message()));
         return parsed.result().orElseThrow(() ->
