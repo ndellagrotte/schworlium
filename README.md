@@ -6,3 +6,10 @@ As expected, the carver replaces vanilla's caves with hollow networks shaped by 
   
 The two substantive changes that pulled the project away from being a 1:1 port are a smoother carve and a taller working range. The original implementation contained jittery per-block math in its noise sampling and threshold logic that produced visibly clunky walls and unnatural seams between regions. This has been replaced with the smoothing approach used in Worlium, yielding cleaner surfaces and more coherent cave shapes. Separately, the carver has been adapted to the post-1.18 extended world height. Due to this change, certain configuration options that no longer made sense were dropped at the same time.
 
+Compatible worldgen mods:
+
+- Tectonic
+- Terralith
+- Moderner Beta
+- Geophilic
+- Subsurface
