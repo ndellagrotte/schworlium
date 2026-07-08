@@ -27,6 +27,7 @@ public final class SchworliumConfig {
     public static double horizonalCompressionMultiplier = 1.0;
     public static double warpAmplifier = 8.0;
     public static boolean modernerBetaCompat = true;
+    public static boolean regenerateConfig = true;
 
     private static boolean loaded = false;
 
@@ -43,24 +44,42 @@ public final class SchworliumConfig {
             return;
         }
 
+        JsonObject obj = null;
         try (var reader = Files.newBufferedReader(file)) {
             JsonElement root = JsonParser.parseReader(reader);
-            if (!root.isJsonObject()) {
-                Constants.LOG.warn("schworlium.json root is not an object; using defaults");
-                return;
+            if (root.isJsonObject()) {
+                obj = root.getAsJsonObject();
+            } else {
+                Constants.LOG.warn("schworlium.json root is not an object; regenerating");
             }
-            JsonObject obj = root.getAsJsonObject();
-            easeInDepth = readInt(obj, "easeInDepth", easeInDepth);
-            lavaBlock = readString(obj, "lavaBlock", lavaBlock);
-            noiseCutoffValue = readDouble(obj, "noiseCutoffValue", noiseCutoffValue);
-            surfaceCutoffValue = readDouble(obj, "surfaceCutoffValue", surfaceCutoffValue);
-            verticalCompressionMultiplier = readDouble(obj, "verticalCompressionMultiplier", verticalCompressionMultiplier);
-            horizonalCompressionMultiplier = readDouble(obj, "horizonalCompressionMultiplier", horizonalCompressionMultiplier);
-            warpAmplifier = readDouble(obj, "warpAmplifier", warpAmplifier);
-            modernerBetaCompat = readBoolean(obj, "modernerBetaCompat", modernerBetaCompat);
         } catch (Exception e) {
-            Constants.LOG.warn("Failed to parse schworlium.json; using defaults", e);
+            Constants.LOG.warn("Failed to parse schworlium.json; regenerating", e);
         }
+
+        // When regenerate_config is enabled (the default), delete the existing file and write a fresh one from
+        // defaults on every mod init — this is how new config options show up after a mod update. Set it to false
+        // to preserve manual edits. A missing or corrupt object also regenerates.
+        if (obj == null || readBoolean(obj, "regenerate_config", regenerateConfig)) {
+            try {
+                Files.deleteIfExists(file);
+            } catch (IOException e) {
+                Constants.LOG.warn("Failed to delete schworlium.json for regeneration", e);
+            }
+            writeDefaults(file);
+            Constants.LOG.info("Regenerated schworlium.json (set \"regenerate_config\": false to keep manual edits)");
+            return;
+        }
+
+        // regenerate_config == false: honor the on-disk values.
+        regenerateConfig = readBoolean(obj, "regenerate_config", regenerateConfig);
+        easeInDepth = readInt(obj, "easeInDepth", easeInDepth);
+        lavaBlock = readString(obj, "lavaBlock", lavaBlock);
+        noiseCutoffValue = readDouble(obj, "noiseCutoffValue", noiseCutoffValue);
+        surfaceCutoffValue = readDouble(obj, "surfaceCutoffValue", surfaceCutoffValue);
+        verticalCompressionMultiplier = readDouble(obj, "verticalCompressionMultiplier", verticalCompressionMultiplier);
+        horizonalCompressionMultiplier = readDouble(obj, "horizonalCompressionMultiplier", horizonalCompressionMultiplier);
+        warpAmplifier = readDouble(obj, "warpAmplifier", warpAmplifier);
+        modernerBetaCompat = readBoolean(obj, "modernerBetaCompat", modernerBetaCompat);
     }
 
     public static BlockState resolveLavaBlock() {
@@ -81,6 +100,7 @@ public final class SchworliumConfig {
         try {
             Files.createDirectories(file.getParent());
             JsonObject obj = new JsonObject();
+            obj.addProperty("regenerate_config", regenerateConfig);
             obj.addProperty("easeInDepth", easeInDepth);
             obj.addProperty("lavaBlock", lavaBlock);
             obj.addProperty("noiseCutoffValue", noiseCutoffValue);
