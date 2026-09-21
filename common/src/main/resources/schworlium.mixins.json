@@ -4,7 +4,8 @@
   "package": "com.denizen.schworlium.mixin",
   "compatibilityLevel": "JAVA_25",
   "mixins": [
-    "ChunkMapMixin"
+    "ChunkMapMixin",
+    "NoiseBasedChunkGeneratorMixin"
   ],
   "client": [],
   "server": [],

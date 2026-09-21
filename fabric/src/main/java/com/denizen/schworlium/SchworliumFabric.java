@@ -6,9 +6,10 @@ import net.fabricmc.api.ModInitializer;
 import net.fabricmc.fabric.api.biome.v1.BiomeModifications;
 import net.fabricmc.fabric.api.biome.v1.BiomeSelectors;
 import net.fabricmc.fabric.api.biome.v1.ModificationPhase;
-import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
+import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLevelEvents;
 import net.minecraft.data.worldgen.Carvers;
 import net.minecraft.resources.Identifier;
+import net.minecraft.world.level.Level;
 
 public class SchworliumFabric implements ModInitializer {
 
@@ -23,11 +24,20 @@ public class SchworliumFabric implements ModInitializer {
                     gs.removeCarver(Carvers.CAVE);
                     gs.removeCarver(Carvers.CAVE_EXTRA_UNDERGROUND);
                     gs.removeCarver(Carvers.CANYON);
-                    gs.addCarver(SchworliumCarvers.CONFIGURED_WORLEY_CAVE);
+                    gs.addCarver(SchworliumCarvers.WORLEY_CAVE);
                 });
 
-        ServerLifecycleEvents.SERVER_STARTED.register(server ->
-                WorldSeedHolder.set(server.overworld().getSeed()));
-        ServerLifecycleEvents.SERVER_STOPPED.register(server -> WorldSeedHolder.clear());
+        // Capture the seed when the overworld is loaded, before any chunk generates. SERVER_STARTED
+        // fires after spawn chunks are generated, so the carver would already be seeded with its fallback.
+        ServerLevelEvents.LOAD.register((server, level) -> {
+            if (level.dimension() == Level.OVERWORLD) {
+                WorldSeedHolder.set(level.getSeed());
+            }
+        });
+        ServerLevelEvents.UNLOAD.register((server, level) -> {
+            if (level.dimension() == Level.OVERWORLD) {
+                WorldSeedHolder.clear();
+            }
+        });
     }
 }

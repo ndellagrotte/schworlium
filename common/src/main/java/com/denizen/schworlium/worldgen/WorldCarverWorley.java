@@ -2,30 +2,25 @@ package com.denizen.schworlium.worldgen;
 
 import com.denizen.schworlium.config.SchworliumConfig;
 import com.denizen.schworlium.util.WorldSeedHolder;
-import net.minecraft.core.BlockPos;
-import net.minecraft.core.Holder;
+import com.mojang.serialization.MapCodec;
 import net.minecraft.util.Mth;
 import net.minecraft.util.RandomSource;
 import net.minecraft.world.level.ChunkPos;
-import net.minecraft.world.level.biome.Biome;
-import net.minecraft.world.level.block.Blocks;
-import net.minecraft.world.level.block.state.BlockState;
-import net.minecraft.world.level.chunk.ChunkAccess;
-import net.minecraft.world.level.chunk.CarvingMask;
-import net.minecraft.world.level.levelgen.Aquifer;
-import net.minecraft.world.level.levelgen.Heightmap;
-import net.minecraft.world.level.levelgen.carver.CarvingContext;
-import net.minecraft.world.level.levelgen.carver.CaveCarverConfiguration;
+import net.minecraft.world.level.chunk.CarverOutput;
+import net.minecraft.world.level.levelgen.WorldGenerationContext;
 import net.minecraft.world.level.levelgen.carver.WorldCarver;
-
-import java.util.function.Function;
 
 /*
  * Adapted from fluke.worleycaves.world.WorldCarverWorley (MIT, SuperFluke) to
- * the Minecraft 26.2 carver API. Caves span world Y -64 to 128. Logic that
- * depended on the pre-1.18 SurfaceBuilder API (top/filler block restoration in
- * digBlock) has been dropped because that API no longer exists; vanilla
- * carvers in 1.21+ do not perform that restoration either.
+ * the Minecraft 26.3 carver API. Caves span world Y -64 to 128.
+ *
+ * Since 26.3 a carver never touches the chunk: it only marks positions in a
+ * CarverOutput bit-mask, and NoiseBasedChunkGenerator.applyCarvingMask later
+ * resolves every marked block through the aquifer (air, water or lava), skips
+ * #minecraft:uncarvable blocks and repairs the surface block above grass. The
+ * pre-26.3 per-block logic (fluid-adjacency skips, lava floor below Y -56,
+ * sand -> sandstone) is therefore gone; vanilla carvers in 26.3 do not do it
+ * either. This carver is pure noise -> mask.
  *
  * Cave-shape evaluation samples the Worley noise PER BLOCK rather than on a
  * coarse 5x5x97 grid with linear interpolation (as the original WorleyCaves
@@ -40,20 +35,13 @@ import java.util.function.Function;
  * The warp-amplitude and threshold-easing formulas are ported verbatim from
  * Worlium so cave shapes match block-for-block for a given seed.
  */
-public class WorldCarverWorley extends WorldCarver<CaveCarverConfiguration> {
+public class WorldCarverWorley implements WorldCarver {
 
-    private static final BlockState AIR = Blocks.AIR.defaultBlockState();
-    private static final BlockState SAND = Blocks.SAND.defaultBlockState();
-    private static final BlockState RED_SAND = Blocks.RED_SAND.defaultBlockState();
-    private static final BlockState SANDSTONE = Blocks.SANDSTONE.defaultBlockState();
-    private static final BlockState RED_SANDSTONE = Blocks.RED_SANDSTONE.defaultBlockState();
+    /** Registered as the schworlium:worley_cave carver type; the carver has no data-driven fields. */
+    public static final MapCodec<WorldCarverWorley> CODEC = MapCodec.unit(WorldCarverWorley::new);
 
     private static final int CAVE_TOP = 128;
     private static final int CAVE_BOTTOM = -64;
-    // Lava fills the 8 blocks above bedrock (worldY in [-63, -56]; -64 is bedrock and not carved).
-    private static final int LAVA_TOP = CAVE_BOTTOM + 8;
-    private static final boolean ADDITIONAL_WATER_CHECKS = false;
-    private static final int SEA_LEVEL = 63;
     // Floor softening — below this Y the cutoff is biased back toward solid so caves taper out
     // before slicing into bedrock. Matches Worlium's MIN_CAVE_HEIGHT + 5 constant.
     private static final int FLOOR_SOFTEN_TOP = CAVE_BOTTOM + 5;
@@ -63,7 +51,6 @@ public class WorldCarverWorley extends WorldCarver<CaveCarverConfiguration> {
     private FastNoiseLite displacementNoisePerlin;
     private volatile boolean initialized = false;
 
-    private BlockState lavaBlock = Blocks.LAVA.defaultBlockState();
     private float noiseCutoff = -0.18f;
     private float warpAmplifier = 8.0f;
     private float easeInDepth = 15f;
@@ -71,9 +58,7 @@ public class WorldCarverWorley extends WorldCarver<CaveCarverConfiguration> {
     private float xzCompression = 1.0f;
     private float surfaceCutoff = -0.081f;
 
-    public WorldCarverWorley() {
-        super(CaveCarverConfiguration.CODEC);
-    }
+    public WorldCarverWorley() {}
 
     public synchronized void init(long worldSeed) {
         worleyF1divF3 = new WorleyUtil((int) worldSeed);
@@ -90,7 +75,6 @@ public class WorldCarverWorley extends WorldCarver<CaveCarverConfiguration> {
         yCompression = (float) SchworliumConfig.verticalCompressionMultiplier;
         xzCompression = (float) SchworliumConfig.horizonalCompressionMultiplier;
         surfaceCutoff = (float) SchworliumConfig.surfaceCutoffValue;
-        lavaBlock = SchworliumConfig.resolveLavaBlock();
 
         initialized = true;
     }
@@ -102,36 +86,36 @@ public class WorldCarverWorley extends WorldCarver<CaveCarverConfiguration> {
     }
 
     @Override
-    public boolean isStartChunk(CaveCarverConfiguration config, RandomSource random) {
+    public MapCodec<WorldCarverWorley> codec() {
+        return CODEC;
+    }
+
+    @Override
+    public boolean isStartChunk(RandomSource random) {
         return true;
     }
 
     @Override
-    public boolean carve(CarvingContext context, CaveCarverConfiguration config, ChunkAccess chunk,
-                         Function<BlockPos, Holder<Biome>> biomeAccessor, RandomSource random,
-                         Aquifer aquifer, ChunkPos chunkPos, CarvingMask carvingMask) {
-        ensureInitialized();
-        if (!chunk.getPos().equals(chunkPos)) {
+    public boolean carve(WorldGenerationContext context, RandomSource random, ChunkPos chunkPos,
+                         ChunkPos sourceChunkPos, CarverOutput output) {
+        // The generator invokes every carver once per source chunk in a 17x17 window around the
+        // chunk being carved. Worley noise is a pure function of world position, so only the
+        // chunk's own invocation does any work.
+        if (!chunkPos.equals(sourceChunkPos)) {
             return false;
         }
-        carveWorleyCaves(chunk, config, chunkPos);
+        ensureInitialized();
+        carveWorleyCaves(chunkPos, output);
         return true;
     }
 
-    @Override
-    protected boolean canReplaceBlock(CaveCarverConfiguration config, BlockState state) {
-        return super.canReplaceBlock(config, state);
-    }
-
-    private void carveWorleyCaves(ChunkAccess chunk, CaveCarverConfiguration config, ChunkPos chunkPos) {
+    private void carveWorleyCaves(ChunkPos chunkPos, CarverOutput output) {
         int chunkMinX = chunkPos.getMinBlockX();
         int chunkMinZ = chunkPos.getMinBlockZ();
-        int chunkMaxHeight = Math.min(getMaxSurfaceHeight(chunk), CAVE_TOP);
-        if (chunkMaxHeight <= CAVE_BOTTOM) return;
-
-        BlockPos.MutableBlockPos worldPos = new BlockPos.MutableBlockPos();
-        BlockPos.MutableBlockPos abovePos = new BlockPos.MutableBlockPos();
-        BlockPos.MutableBlockPos neighborPos = new BlockPos.MutableBlockPos();
+        int topY = Math.min(CAVE_TOP, output.maxY());
+        // CAVE_BOTTOM itself is bedrock and never carved.
+        int bottomY = Math.max(CAVE_BOTTOM + 1, output.minY());
+        if (topY < bottomY) return;
 
         float dispDenom = CAVE_TOP * 0.85f;
         float surfaceStart = CAVE_TOP - easeInDepth;
@@ -140,7 +124,6 @@ public class WorldCarverWorley extends WorldCarver<CaveCarverConfiguration> {
             int worldX = chunkMinX + localX;
             for (int localZ = 0; localZ < 16; localZ++) {
                 int worldZ = chunkMinZ + localZ;
-                int depth = 0;
 
                 // The Perlin warp depends only on (x, z); precompute the base sample once per
                 // column and multiply by the per-Y dispAmp inside the loop. Same math, ~3x fewer
@@ -149,19 +132,7 @@ public class WorldCarverWorley extends WorldCarver<CaveCarverConfiguration> {
                 float warpBaseY = displacementNoisePerlin.GetNoise(worldX, worldZ + 67.0f);
                 float warpBaseZ = displacementNoisePerlin.GetNoise(worldX, worldZ + 149.0f);
 
-                for (int worldY = chunkMaxHeight; worldY > CAVE_BOTTOM; worldY--) {
-                    worldPos.set(worldX, worldY, worldZ);
-                    BlockState currentBlock = chunk.getBlockState(worldPos);
-
-                    // Depth tracks blocks descended since the column's first replaceable block.
-                    // Used by the fluid-adjacency safety check below.
-                    if (depth == 0) {
-                        if (!canReplaceBlock(config, currentBlock)) continue;
-                        depth = 1;
-                    } else {
-                        depth++;
-                    }
-
+                for (int worldY = topY; worldY >= bottomY; worldY--) {
                     float adjustedNoiseCutoff = noiseCutoff;
                     if (worldY > surfaceStart) {
                         float t = (worldY - surfaceStart) / easeInDepth;
@@ -181,69 +152,10 @@ public class WorldCarverWorley extends WorldCarver<CaveCarverConfiguration> {
                             worldY * yCompression + warpBaseY * dispAmp,
                             worldZ * xzCompression + warpBaseZ * dispAmp);
 
-                    if (noise <= adjustedNoiseCutoff) continue;
-
-                    abovePos.set(worldX, worldY + 1, worldZ);
-                    BlockState aboveBlock = chunk.getBlockState(abovePos);
-                    if (aboveBlock == null) aboveBlock = AIR;
-
-                    if (isFluidBlock(aboveBlock) && worldY > LAVA_TOP) continue;
-
-                    if ((depth < easeInDepth || worldY > (SEA_LEVEL - 8) || ADDITIONAL_WATER_CHECKS)
-                            && worldY > LAVA_TOP) {
-                        if (localX < 15
-                                && isFluidBlock(chunk.getBlockState(neighborPos.set(worldX + 1, worldY, worldZ))))
-                            continue;
-                        if (localX > 0
-                                && isFluidBlock(chunk.getBlockState(neighborPos.set(worldX - 1, worldY, worldZ))))
-                            continue;
-                        if (localZ < 15
-                                && isFluidBlock(chunk.getBlockState(neighborPos.set(worldX, worldY, worldZ + 1))))
-                            continue;
-                        if (localZ > 0
-                                && isFluidBlock(chunk.getBlockState(neighborPos.set(worldX, worldY, worldZ - 1))))
-                            continue;
-                    }
-
-                    if (canReplaceBlock(config, currentBlock)) {
-                        digBlock(chunk, worldPos, worldY, aboveBlock);
+                    if (noise > adjustedNoiseCutoff) {
+                        output.carve(localX, worldY, localZ);
                     }
                 }
-            }
-        }
-    }
-
-    // 6-point hexagon sample of the surface heightmap, matching the original carver.
-    private int getMaxSurfaceHeight(ChunkAccess chunk) {
-        int max = CAVE_BOTTOM;
-        int[][] testCoords = {{2, 6}, {3, 11}, {7, 2}, {9, 13}, {12, 4}, {13, 9}};
-        for (int[] c : testCoords) {
-            int h = chunk.getHeight(Heightmap.Types.WORLD_SURFACE_WG, c[0], c[1]);
-            if (h > max) {
-                max = h;
-                if (max > CAVE_TOP) return max;
-            }
-        }
-        return max;
-    }
-
-    private static boolean isFluidBlock(BlockState state) {
-        return state != null && !state.getFluidState().isEmpty();
-    }
-
-    private void digBlock(ChunkAccess chunk, BlockPos pos, int worldY, BlockState aboveBlock) {
-        if (worldY <= LAVA_TOP) {
-            chunk.setBlockState(pos, lavaBlock, 0);
-            return;
-        }
-
-        chunk.setBlockState(pos, AIR, 0);
-
-        if (aboveBlock != null) {
-            if (aboveBlock.is(SAND.getBlock())) {
-                chunk.setBlockState(pos.above(), SANDSTONE, 0);
-            } else if (aboveBlock.is(RED_SAND.getBlock())) {
-                chunk.setBlockState(pos.above(), RED_SANDSTONE, 0);
             }
         }
     }

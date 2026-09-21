@@ -7,7 +7,7 @@ import com.llamalad7.mixinextras.sugar.Local;
 import net.minecraft.core.Holder;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.server.level.WorldGenRegion;
-import net.minecraft.world.level.levelgen.carver.ConfiguredWorldCarver;
+import net.minecraft.world.level.levelgen.carver.WorldCarver;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 
@@ -17,9 +17,9 @@ import java.util.List;
  * Moderner-Beta compat: replace the carver list Moderner-Beta pulls from each biome's generation settings with
  * schworlium's worley carver only.
  *
- * <p>Moderner-Beta's {@code ModernBetaChunkGenerator.applyCarvers} is a full override (no {@code super}) that still
- * runs the standard vanilla carve loop: for each nearby chunk it fetches {@code genSettings.getCarvers()} and calls
- * {@code configuredCarver.carve(...)} with a proper carving context/mask/aquifer/random. By substituting that fetched
+ * <p>Moderner-Beta's {@code ModernBetaChunkGenerator.generateCarvers} (named {@code applyCarvers} before 26.3) is a full
+ * override (no {@code super}) that still runs the standard vanilla carve loop: for each nearby chunk it fetches
+ * {@code genSettings.getCarvers()} and calls {@code carver.carve(...)} with a proper context/mask/random. By substituting that fetched
  * list we (a) get worley caves through Moderner-Beta's own carve pipeline, and (b) drop Moderner-Beta's own
  * beta_cave/beta_cave_deep/beta_canyon carvers plus any vanilla carvers, since they are no longer in the list. This is
  * loader-symmetric and does not depend on biome tags or schworlium's biome modifiers (Moderner-Beta's {@code
@@ -33,20 +33,20 @@ import java.util.List;
 public abstract class ModernBetaChunkGeneratorMixin {
 
     @ModifyExpressionValue(
-        method = "applyCarvers",
+        method = "generateCarvers",
         at = @At(
             value = "INVOKE",
             target = "Lnet/minecraft/world/level/biome/BiomeGenerationSettings;getCarvers()Ljava/lang/Iterable;"
         )
     )
-    private Iterable<Holder<ConfiguredWorldCarver<?>>> schworlium$forceWorleyOnly(
-            Iterable<Holder<ConfiguredWorldCarver<?>>> original,
+    private Iterable<Holder<WorldCarver>> schworlium$forceWorleyOnly(
+            Iterable<Holder<WorldCarver>> original,
             @Local(argsOnly = true) WorldGenRegion chunkRegion) {
         if (!SchworliumConfig.modernerBetaCompat) return original;
         return chunkRegion.registryAccess()
-                .lookupOrThrow(Registries.CONFIGURED_CARVER)
-                .get(SchworliumCarvers.CONFIGURED_WORLEY_CAVE)
-                .<Iterable<Holder<ConfiguredWorldCarver<?>>>>map(List::of)
+                .lookupOrThrow(Registries.CARVER)
+                .get(SchworliumCarvers.WORLEY_CAVE)
+                .<Iterable<Holder<WorldCarver>>>map(List::of)
                 .orElse(original);
     }
 }

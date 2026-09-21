@@ -9,7 +9,8 @@ import net.minecraft.core.RegistryAccess;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.Identifier;
 import net.minecraft.resources.RegistryOps;
-import net.minecraft.world.level.levelgen.DensityFunction;
+import net.minecraft.world.level.levelgen.densityfunction.DensityFunction;
+import org.jetbrains.annotations.Nullable;
 
 /*
  * Compatibility bridge for the Tectonic worldgen mod.
@@ -34,64 +35,59 @@ public final class TectonicCompat {
     public static final String TECTONIC_MOD_ID = "tectonic";
 
     /** Present in the DENSITY_FUNCTION registry iff Tectonic's overworld worldgen datapack is active. */
-    private static final Identifier TECTONIC_BASE_TERRAIN =
-            Identifier.fromNamespaceAndPath(TECTONIC_MOD_ID, "base_terrain");
+    private static final Identifier TECTONIC_SLOPED_CHEESE =
+            Identifier.fromNamespaceAndPath(TECTONIC_MOD_ID, "sloped_cheese");
 
     /*
-     * Tectonic's overworld final_density (data/minecraft/worldgen/density_function/overworld/noise_router/
-     * final_density.json) with the cave-noise terms stripped: min(base_terrain, caves) -> base_terrain, and
-     * the outer min(<slope chain>, cave/noodle) -> <slope chain>. The rivers + lava-tunnel term is kept
-     * verbatim. Only vanilla density-function types are used; tectonic:* appear solely as id references.
+     * Tectonic 3.0.29's overworld final_density (its override of data/minecraft/worldgen/density_function/
+     * overworld/final_density.json) with the cave-noise terms stripped: min(sloped_cheese, caves) -> sloped_cheese,
+     * and the outer min(<squeeze chain>, cave/noodle) -> <squeeze chain>. The rivers + lava-tunnel term and the
+     * beardifier are kept verbatim. Only vanilla density-function types are used; tectonic:* appear solely as id
+     * references.
      */
     private static final String STRIPPED_FINAL_DENSITY_JSON = """
             {
               "type": "minecraft:add",
-              "argument1": {
-                "type": "minecraft:squeeze",
-                "argument": {
-                  "type": "minecraft:mul",
-                  "argument1": 0.64,
-                  "argument2": {
+              "left": {
+                "type": "minecraft:add",
+                "left": {
+                  "type": "minecraft:squeeze",
+                  "input": {
                     "type": "minecraft:interpolated",
-                    "argument": {
-                      "type": "minecraft:blend_density",
-                      "argument": {
-                        "type": "minecraft:add",
-                        "argument1": 0.1,
-                        "argument2": {
-                          "type": "minecraft:mul",
-                          "argument1": "tectonic:__constants/slope_lower",
-                          "argument2": {
-                            "type": "minecraft:add",
-                            "argument1": -0.1,
-                            "argument2": {
-                              "type": "minecraft:add",
-                              "argument1": -1,
-                              "argument2": {
-                                "type": "minecraft:mul",
-                                "argument1": "tectonic:__constants/slope_upper",
-                                "argument2": {
-                                  "type": "minecraft:add",
-                                  "argument1": 1,
-                                  "argument2": "tectonic:base_terrain"
-                                }
-                              }
-                            }
+                    "cell_size_xz": 4,
+                    "cell_size_y": 8,
+                    "input": {
+                      "type": "minecraft:mul",
+                      "left": 0.64,
+                      "right": {
+                        "type": "minecraft:blend_density",
+                        "input": {
+                          "type": "minecraft:lerp",
+                          "alpha": "tectonic:__constants/slope_lower",
+                          "first": 0.1,
+                          "second": {
+                            "type": "minecraft:lerp",
+                            "alpha": "tectonic:__constants/slope_upper",
+                            "first": -0.1,
+                            "second": "tectonic:sloped_cheese"
                           }
                         }
                       }
                     }
                   }
+                },
+                "right": {
+                  "type": "minecraft:add",
+                  "left": {
+                    "type": "minecraft:min",
+                    "left": 0.0002,
+                    "right": "tectonic:underground_river/total"
+                  },
+                  "right": "tectonic:lava_tunnel/total"
                 }
               },
-              "argument2": {
-                "type": "minecraft:add",
-                "argument1": {
-                  "type": "minecraft:min",
-                  "argument1": 0.0002,
-                  "argument2": "tectonic:underground_river/total"
-                },
-                "argument2": "tectonic:lava_tunnel/total"
+              "right": {
+                "type": "minecraft:beardifier"
               }
             }
             """;
@@ -100,21 +96,22 @@ public final class TectonicCompat {
 
     /** True when Tectonic's overworld worldgen is loaded (its density functions are in the registry). */
     public static boolean isTectonicOverworld(RegistryAccess registryAccess) {
-        return registryAccess.lookupOrThrow(Registries.DENSITY_FUNCTION).containsKey(TECTONIC_BASE_TERRAIN);
+        return registryAccess.lookupOrThrow(Registries.DENSITY_FUNCTION).containsKey(TECTONIC_SLOPED_CHEESE);
     }
 
     /**
      * Decodes the Tectonic-shaped, cave-stripped final_density against the live registry. Only call when
-     * {@link #isTectonicOverworld(RegistryAccess)} is true, so the tectonic:* re/ferences resolve.
+     * {@link #isTectonicOverworld(RegistryAccess)} is true, so the tectonic:* references resolve.
+     *
+     * @return the decoded function, or {@code null} if Tectonic's density-function layout no longer matches
+     *         (in which case the caller should leave Tectonic's own router alone rather than clobber it).
      */
-    public static DensityFunction buildStrippedFinalDensity(RegistryAccess registryAccess) {
+    public static @Nullable DensityFunction buildStrippedFinalDensity(RegistryAccess registryAccess) {
         JsonElement json = JsonParser.parseString(STRIPPED_FINAL_DENSITY_JSON);
         RegistryOps<JsonElement> ops = RegistryOps.create(JsonOps.INSTANCE, registryAccess);
         DataResult<DensityFunction> parsed = DensityFunction.CODEC.parse(ops, json);
-        // 1.21.11 branch uses DIRECT_CODEC
         parsed.error().ifPresent(err ->
                 Constants.LOG.error("Failed to decode Tectonic-compatible final_density: {}", err.message()));
-        return parsed.result().orElseThrow(() ->
-                new IllegalStateException("Failed to decode Tectonic-compatible final_density"));
+        return parsed.result().orElse(null);
     }
 }

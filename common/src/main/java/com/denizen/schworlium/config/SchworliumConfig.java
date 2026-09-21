@@ -7,11 +7,6 @@ import com.google.gson.GsonBuilder;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
-import net.minecraft.core.registries.BuiltInRegistries;
-import net.minecraft.resources.Identifier;
-import net.minecraft.world.level.block.Block;
-import net.minecraft.world.level.block.Blocks;
-import net.minecraft.world.level.block.state.BlockState;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -20,7 +15,6 @@ import java.nio.file.Path;
 public final class SchworliumConfig {
 
     public static int easeInDepth = 15;
-    public static String lavaBlock = "minecraft:lava";
     public static double noiseCutoffValue = -0.18;
     public static double surfaceCutoffValue = -0.081;
     public static double verticalCompressionMultiplier = 2.0;
@@ -73,7 +67,6 @@ public final class SchworliumConfig {
         // regenerate_config == false: honor the on-disk values.
         regenerateConfig = readBoolean(obj, "regenerate_config", regenerateConfig);
         easeInDepth = readInt(obj, "easeInDepth", easeInDepth);
-        lavaBlock = readString(obj, "lavaBlock", lavaBlock);
         noiseCutoffValue = readDouble(obj, "noiseCutoffValue", noiseCutoffValue);
         surfaceCutoffValue = readDouble(obj, "surfaceCutoffValue", surfaceCutoffValue);
         verticalCompressionMultiplier = readDouble(obj, "verticalCompressionMultiplier", verticalCompressionMultiplier);
@@ -82,27 +75,12 @@ public final class SchworliumConfig {
         modernerBetaCompat = readBoolean(obj, "modernerBetaCompat", modernerBetaCompat);
     }
 
-    public static BlockState resolveLavaBlock() {
-        Identifier id = Identifier.tryParse(lavaBlock);
-        if (id == null) {
-            Constants.LOG.warn("Invalid lavaBlock id: {}; falling back to minecraft:lava", lavaBlock);
-            return Blocks.LAVA.defaultBlockState();
-        }
-        Block block = BuiltInRegistries.BLOCK.getValue(id);
-        if (block == Blocks.AIR) {
-            Constants.LOG.warn("Unknown lavaBlock id: {}; falling back to minecraft:lava", lavaBlock);
-            return Blocks.LAVA.defaultBlockState();
-        }
-        return block.defaultBlockState();
-    }
-
     private static void writeDefaults(Path file) {
         try {
             Files.createDirectories(file.getParent());
             JsonObject obj = new JsonObject();
             obj.addProperty("regenerate_config", regenerateConfig);
             obj.addProperty("easeInDepth", easeInDepth);
-            obj.addProperty("lavaBlock", lavaBlock);
             obj.addProperty("noiseCutoffValue", noiseCutoffValue);
             obj.addProperty("surfaceCutoffValue", surfaceCutoffValue);
             obj.addProperty("verticalCompressionMultiplier", verticalCompressionMultiplier);
@@ -122,10 +100,6 @@ public final class SchworliumConfig {
 
     private static double readDouble(JsonObject o, String key, double defaultValue) {
         return o.has(key) && o.get(key).isJsonPrimitive() ? o.get(key).getAsDouble() : defaultValue;
-    }
-
-    private static String readString(JsonObject o, String key, String defaultValue) {
-        return o.has(key) && o.get(key).isJsonPrimitive() ? o.get(key).getAsString() : defaultValue;
     }
 
     private static boolean readBoolean(JsonObject o, String key, boolean defaultValue) {

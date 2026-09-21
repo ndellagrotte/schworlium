@@ -24,7 +24,7 @@ public class SchworliumNeoForge {
     }
 
     private static void onRegister(RegisterEvent event) {
-        if (Registries.CARVER.equals(event.getRegistryKey())) {
+        if (Registries.CARVER_TYPE.equals(event.getRegistryKey())) {
             SchworliumCarvers.bootstrap();
         }
     }

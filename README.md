@@ -1,6 +1,6 @@
 # Schworlium (the highly anticipated sequel to Worlium)
 
-Schworlium is a Worley-noise cave generation mod for Minecraft 26.2.x and 1.21.11 targeting both Fabric and NeoForge. Right now, It's essentially an opinionated port of SuperFluke's Worley's Caves, but it will eventually diverge into a more fleshed-out spelunking mod.
+Schworlium is a Worley-noise cave generation mod for Minecraft 26.3, 26.2.x and 1.21.11 targeting both Fabric and NeoForge. Right now, It's essentially an opinionated port of SuperFluke's Worley's Caves, but it will eventually diverge into a more fleshed-out spelunking mod.
 
 As expected, the carver replaces vanilla's caves with hollow networks shaped by 3D Worley noise.
   
@@ -13,3 +13,5 @@ Compatible worldgen mods:
 - Moderner Beta
 - Geophilic
 - Subsurface
+
+Note for 26.3: carvers can no longer place blocks themselves, so the `lavaBlock` config option was removed. Lava pools below Y -54, water near aquifers and the surface fix-up above carved blocks are now handled by vanilla's carving pass.

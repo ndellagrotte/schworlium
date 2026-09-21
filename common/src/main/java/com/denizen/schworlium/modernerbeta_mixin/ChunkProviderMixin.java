@@ -8,7 +8,7 @@ import org.spongepowered.asm.mixin.injection.At;
 /**
  * Moderner-Beta compat: force {@code CaveGeneration.useCarvers()} to true so the carve pass runs even under presets
  * that disable carvers (e.g. the cave-DISABLED preset). Moderner-Beta's {@code ChunkProvider} constructor computes
- * {@code skipCarvers = !useCarvers()}; keeping carvers on guarantees {@code applyCarvers} runs and thus schworlium's
+ * {@code skipCarvers = !useCarvers()}; keeping carvers on guarantees {@code generateCarvers} runs and thus schworlium's
  * worley substitution ({@link ModernBetaChunkGeneratorMixin}) executes. This is the inverse of Worlium, which forces
  * carvers off because it carves imperatively; schworlium needs the carve pipeline to run its worley WorldCarver.
  */

@@ -4,21 +4,18 @@ import com.denizen.schworlium.Constants;
 import net.minecraft.core.Registry;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.registries.Registries;
-import net.minecraft.resources.ResourceKey;
 import net.minecraft.resources.Identifier;
-
-import net.minecraft.world.level.levelgen.carver.ConfiguredWorldCarver;
+import net.minecraft.resources.ResourceKey;
+import net.minecraft.world.level.levelgen.carver.WorldCarver;
 
 public final class SchworliumCarvers {
 
     public static final Identifier WORLEY_CAVE_ID =
             Identifier.fromNamespaceAndPath(Constants.MOD_ID, "worley_cave");
 
-
-    public static final WorldCarverWorley WORLEY_CAVE = new WorldCarverWorley();
-
-    public static final ResourceKey<ConfiguredWorldCarver<?>> CONFIGURED_WORLEY_CAVE =
-            ResourceKey.create(Registries.CONFIGURED_CARVER, WORLEY_CAVE_ID);
+    /** The datapack carver entry (data/schworlium/worldgen/carver/worley_cave.json). */
+    public static final ResourceKey<WorldCarver> WORLEY_CAVE =
+            ResourceKey.create(Registries.CARVER, WORLEY_CAVE_ID);
 
     private static boolean bootstrapped = false;
 
@@ -26,7 +23,7 @@ public final class SchworliumCarvers {
 
     public static synchronized void bootstrap() {
         if (bootstrapped) return;
-        Registry.register(BuiltInRegistries.CARVER, WORLEY_CAVE_ID, WORLEY_CAVE);
+        Registry.register(BuiltInRegistries.CARVER_TYPE, WORLEY_CAVE_ID, WorldCarverWorley.CODEC);
         bootstrapped = true;
         Constants.LOG.info("Registered Worley carver type");
     }
