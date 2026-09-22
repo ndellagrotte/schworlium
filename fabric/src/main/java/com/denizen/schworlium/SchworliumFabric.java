@@ -6,9 +6,10 @@ import net.fabricmc.api.ModInitializer;
 import net.fabricmc.fabric.api.biome.v1.BiomeModifications;
 import net.fabricmc.fabric.api.biome.v1.BiomeSelectors;
 import net.fabricmc.fabric.api.biome.v1.ModificationPhase;
-import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
+import net.fabricmc.fabric.api.event.lifecycle.v1.ServerWorldEvents;
 import net.minecraft.data.worldgen.Carvers;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.world.level.Level;
 import net.minecraft.world.level.levelgen.GenerationStep;
 
 public class SchworliumFabric implements ModInitializer {
@@ -27,8 +28,18 @@ public class SchworliumFabric implements ModInitializer {
                     gs.addCarver(GenerationStep.Carving.AIR, SchworliumCarvers.CONFIGURED_WORLEY_CAVE);
                 });
 
-        ServerLifecycleEvents.SERVER_STARTED.register(server ->
-                WorldSeedHolder.set(server.overworld().getSeed()));
-        ServerLifecycleEvents.SERVER_STOPPED.register(server -> WorldSeedHolder.clear());
+        // ServerWorldEvents.LOAD fires inside MinecraftServer.createLevels, before spawn chunks are
+        // prepared. SERVER_STARTED fires after prepareLevels, by which point the carver has already
+        // initialized with its fallback seed. Mirrors NeoForge's LevelEvent.Load / Unload.
+        ServerWorldEvents.LOAD.register((server, world) -> {
+            if (world.dimension() == Level.OVERWORLD) {
+                WorldSeedHolder.set(world.getSeed());
+            }
+        });
+        ServerWorldEvents.UNLOAD.register((server, world) -> {
+            if (world.dimension() == Level.OVERWORLD) {
+                WorldSeedHolder.clear();
+            }
+        });
     }
 }
