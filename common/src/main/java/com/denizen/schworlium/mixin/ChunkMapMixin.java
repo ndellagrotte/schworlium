@@ -8,7 +8,7 @@ import com.llamalad7.mixinextras.sugar.Local;
 import net.minecraft.core.HolderGetter;
 import net.minecraft.core.RegistryAccess;
 import net.minecraft.core.registries.Registries;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.level.ChunkMap;
 import net.minecraft.server.level.ServerLevel;
@@ -49,7 +49,7 @@ public abstract class ChunkMapMixin {
     @Unique
     private static final ResourceKey<DensityFunction> SCHWORLIUM$NO_NOISE_CAVES_FINAL_DENSITY =
             ResourceKey.create(Registries.DENSITY_FUNCTION,
-                    Identifier.fromNamespaceAndPath(Constants.MOD_ID, "overworld_no_noise_caves_final_density"));
+                    ResourceLocation.fromNamespaceAndPath(Constants.MOD_ID, "overworld_no_noise_caves_final_density"));
 
     @WrapOperation(
             method = "<init>",
@@ -75,8 +75,8 @@ public abstract class ChunkMapMixin {
                         + "(kept terrain, underground rivers and lava tunnels)");
             } else {
                 replacement = registryAccess
-                        .lookupOrThrow(Registries.DENSITY_FUNCTION)
-                        .getValueOrThrow(SCHWORLIUM$NO_NOISE_CAVES_FINAL_DENSITY);
+                        .registryOrThrow(Registries.DENSITY_FUNCTION)
+                        .getOrThrow(SCHWORLIUM$NO_NOISE_CAVES_FINAL_DENSITY);
                 Constants.LOG.info("Disabled vanilla noise caves in the overworld noise router");
             }
             settings = schworlium$withFinalDensity(settings, replacement);
@@ -99,7 +99,7 @@ public abstract class ChunkMapMixin {
                 router.erosion(),
                 router.depth(),
                 router.ridges(),
-                router.preliminarySurfaceLevel(),
+                router.initialDensityWithoutJaggedness(),
                 finalDensity,
                 router.veinToggle(),
                 router.veinRidged(),

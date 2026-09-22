@@ -22,7 +22,7 @@ import java.util.function.Function;
 
 /*
  * Adapted from fluke.worleycaves.world.WorldCarverWorley (MIT, SuperFluke) to
- * the Minecraft 26.2 carver API. Caves span world Y -64 to 128. Logic that
+ * the Minecraft 1.21.1 carver API. Caves span world Y -64 to 128. Logic that
  * depended on the pre-1.18 SurfaceBuilder API (top/filler block restoration in
  * digBlock) has been dropped because that API no longer exists; vanilla
  * carvers in 1.21+ do not perform that restoration either.
@@ -233,17 +233,17 @@ public class WorldCarverWorley extends WorldCarver<CaveCarverConfiguration> {
 
     private void digBlock(ChunkAccess chunk, BlockPos pos, int worldY, BlockState aboveBlock) {
         if (worldY <= LAVA_TOP) {
-            chunk.setBlockState(pos, lavaBlock, 0);
+            chunk.setBlockState(pos, lavaBlock, false);
             return;
         }
 
-        chunk.setBlockState(pos, AIR, 0);
+        chunk.setBlockState(pos, AIR, false);
 
         if (aboveBlock != null) {
             if (aboveBlock.is(SAND.getBlock())) {
-                chunk.setBlockState(pos.above(), SANDSTONE, 0);
+                chunk.setBlockState(pos.above(), SANDSTONE, false);
             } else if (aboveBlock.is(RED_SAND.getBlock())) {
-                chunk.setBlockState(pos.above(), RED_SANDSTONE, 0);
+                chunk.setBlockState(pos.above(), RED_SANDSTONE, false);
             }
         }
     }

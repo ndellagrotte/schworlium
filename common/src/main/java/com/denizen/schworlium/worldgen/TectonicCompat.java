@@ -7,7 +7,7 @@ import com.mojang.serialization.DataResult;
 import com.mojang.serialization.JsonOps;
 import net.minecraft.core.RegistryAccess;
 import net.minecraft.core.registries.Registries;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.resources.RegistryOps;
 import net.minecraft.world.level.levelgen.DensityFunction;
 
@@ -34,8 +34,8 @@ public final class TectonicCompat {
     public static final String TECTONIC_MOD_ID = "tectonic";
 
     /** Present in the DENSITY_FUNCTION registry iff Tectonic's overworld worldgen datapack is active. */
-    private static final Identifier TECTONIC_BASE_TERRAIN =
-            Identifier.fromNamespaceAndPath(TECTONIC_MOD_ID, "base_terrain");
+    private static final ResourceLocation TECTONIC_BASE_TERRAIN =
+            ResourceLocation.fromNamespaceAndPath(TECTONIC_MOD_ID, "base_terrain");
 
     /*
      * Tectonic's overworld final_density (data/minecraft/worldgen/density_function/overworld/noise_router/
@@ -100,7 +100,7 @@ public final class TectonicCompat {
 
     /** True when Tectonic's overworld worldgen is loaded (its density functions are in the registry). */
     public static boolean isTectonicOverworld(RegistryAccess registryAccess) {
-        return registryAccess.lookupOrThrow(Registries.DENSITY_FUNCTION).containsKey(TECTONIC_BASE_TERRAIN);
+        return registryAccess.registryOrThrow(Registries.DENSITY_FUNCTION).containsKey(TECTONIC_BASE_TERRAIN);
     }
 
     /**
@@ -111,7 +111,6 @@ public final class TectonicCompat {
         JsonElement json = JsonParser.parseString(STRIPPED_FINAL_DENSITY_JSON);
         RegistryOps<JsonElement> ops = RegistryOps.create(JsonOps.INSTANCE, registryAccess);
         DataResult<DensityFunction> parsed = DensityFunction.DIRECT_CODEC.parse(ops, json);
-        // 26.1 branch uses CODEC
         parsed.error().ifPresent(err ->
                 Constants.LOG.error("Failed to decode Tectonic-compatible final_density: {}", err.message()));
         return parsed.result().orElseThrow(() ->

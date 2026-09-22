@@ -8,7 +8,8 @@ import net.fabricmc.fabric.api.biome.v1.BiomeSelectors;
 import net.fabricmc.fabric.api.biome.v1.ModificationPhase;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
 import net.minecraft.data.worldgen.Carvers;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
+import net.minecraft.world.level.levelgen.GenerationStep;
 
 public class SchworliumFabric implements ModInitializer {
 
@@ -17,13 +18,13 @@ public class SchworliumFabric implements ModInitializer {
         SchworliumCommon.init();
         SchworliumCarvers.bootstrap();
 
-        BiomeModifications.create(Identifier.fromNamespaceAndPath(Constants.MOD_ID, "carvers"))
+        BiomeModifications.create(ResourceLocation.fromNamespaceAndPath(Constants.MOD_ID, "carvers"))
                 .add(ModificationPhase.ADDITIONS, BiomeSelectors.foundInOverworld(), ctx -> {
                     var gs = ctx.getGenerationSettings();
                     gs.removeCarver(Carvers.CAVE);
                     gs.removeCarver(Carvers.CAVE_EXTRA_UNDERGROUND);
                     gs.removeCarver(Carvers.CANYON);
-                    gs.addCarver(SchworliumCarvers.CONFIGURED_WORLEY_CAVE);
+                    gs.addCarver(GenerationStep.Carving.AIR, SchworliumCarvers.CONFIGURED_WORLEY_CAVE);
                 });
 
         ServerLifecycleEvents.SERVER_STARTED.register(server ->

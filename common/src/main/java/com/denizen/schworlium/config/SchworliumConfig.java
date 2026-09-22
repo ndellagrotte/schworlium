@@ -8,7 +8,7 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import net.minecraft.core.registries.BuiltInRegistries;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
@@ -83,12 +83,12 @@ public final class SchworliumConfig {
     }
 
     public static BlockState resolveLavaBlock() {
-        Identifier id = Identifier.tryParse(lavaBlock);
+        ResourceLocation id = ResourceLocation.tryParse(lavaBlock);
         if (id == null) {
             Constants.LOG.warn("Invalid lavaBlock id: {}; falling back to minecraft:lava", lavaBlock);
             return Blocks.LAVA.defaultBlockState();
         }
-        Block block = BuiltInRegistries.BLOCK.getValue(id);
+        Block block = BuiltInRegistries.BLOCK.get(id);
         if (block == Blocks.AIR) {
             Constants.LOG.warn("Unknown lavaBlock id: {}; falling back to minecraft:lava", lavaBlock);
             return Blocks.LAVA.defaultBlockState();

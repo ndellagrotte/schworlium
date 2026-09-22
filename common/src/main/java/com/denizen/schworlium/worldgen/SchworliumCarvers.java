@@ -5,14 +5,14 @@ import net.minecraft.core.Registry;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.ResourceKey;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 
 import net.minecraft.world.level.levelgen.carver.ConfiguredWorldCarver;
 
 public final class SchworliumCarvers {
 
-    public static final Identifier WORLEY_CAVE_ID =
-            Identifier.fromNamespaceAndPath(Constants.MOD_ID, "worley_cave");
+    public static final ResourceLocation WORLEY_CAVE_ID =
+            ResourceLocation.fromNamespaceAndPath(Constants.MOD_ID, "worley_cave");
 
 
     public static final WorldCarverWorley WORLEY_CAVE = new WorldCarverWorley();
