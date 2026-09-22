@@ -59,9 +59,15 @@ public class WorldCarverWorley extends WorldCarver<CaveCarverConfiguration> {
     private static final int FLOOR_SOFTEN_TOP = CAVE_BOTTOM + 5;
     private static final float FLOOR_SOFTEN_PER_BLOCK = 0.05f;
 
+    private static final long FALLBACK_SEED = 1337L;
+
     private WorleyUtil worleyF1divF3;
     private FastNoiseLite displacementNoisePerlin;
     private volatile boolean initialized = false;
+    // Seed the noise generators were last built from. The carver is a single registry instance
+    // that outlives any one world, so a session that opens world A and then world B must re-init
+    // rather than keep A's noise.
+    private volatile long initializedSeed;
 
     private BlockState lavaBlock = Blocks.LAVA.defaultBlockState();
     private float noiseCutoff = -0.18f;
@@ -92,13 +98,22 @@ public class WorldCarverWorley extends WorldCarver<CaveCarverConfiguration> {
         surfaceCutoff = (float) SchworliumConfig.surfaceCutoffValue;
         lavaBlock = SchworliumConfig.resolveLavaBlock();
 
+        initializedSeed = worldSeed;
         initialized = true;
     }
 
+    private static long currentSeed() {
+        return WorldSeedHolder.HAS_SEED ? WorldSeedHolder.SEED : FALLBACK_SEED;
+    }
+
     private void ensureInitialized() {
-        if (initialized) return;
-        long seed = WorldSeedHolder.HAS_SEED ? WorldSeedHolder.SEED : 1337L;
-        init(seed);
+        long seed = currentSeed();
+        if (initialized && initializedSeed == seed) return;
+        synchronized (this) {
+            // Re-check under the lock: another worker may have re-initialized for this seed already.
+            if (initialized && initializedSeed == seed) return;
+            init(seed);
+        }
     }
 
     @Override
